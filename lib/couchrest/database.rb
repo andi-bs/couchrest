@@ -124,7 +124,7 @@ module CouchRest
       end
       result = if doc['_id']
         slug = escape_docid(doc['_id'])
-        begin     
+        begin
           uri = "#{@root}/#{slug}"
           uri << "?batch=ok" if batch
           CouchRest.put uri, doc
@@ -168,7 +168,7 @@ module CouchRest
         docs = @bulk_save_cache
         @bulk_save_cache = []
       end
-      if (use_uuids) 
+      if (use_uuids)
         ids, noids = docs.partition{|d|d['_id']}
         uuid_count = [noids.length, @server.uuid_batch_count].max
         noids.each do |doc|
@@ -186,13 +186,13 @@ module CouchRest
     # If <tt>bulk</tt> is true (false by default) the deletion is recorded for bulk-saving (bulk-deletion :) later.
     # Bulk saving happens automatically when #bulk_save_cache limit is exceded, or on the next non bulk save.
     def delete_doc(doc, bulk = false)
-      raise ArgumentError, "_id and _rev required for deleting" unless doc['_id'] && doc['_rev']      
+      raise ArgumentError, "_id and _rev required for deleting" unless doc['_id'] && doc['_rev']
       if bulk
         @bulk_save_cache << { '_id' => doc['_id'], '_rev' => doc['_rev'], '_deleted' => true }
         return bulk_save if @bulk_save_cache.length >= @bulk_save_cache_limit
         return { "ok" => true } # Mimic the non-deferred version
       end
-      slug = escape_docid(doc['_id'])        
+      slug = escape_docid(doc['_id'])
       CouchRest.delete "#{@root}/#{slug}?rev=#{doc['_rev']}"
     end
 
@@ -201,7 +201,7 @@ module CouchRest
     # hash with a '_rev' key
     def copy_doc(doc, dest)
       raise ArgumentError, "_id is required for copying" unless doc['_id']
-      slug = escape_docid(doc['_id'])        
+      slug = escape_docid(doc['_id'])
       destination = if dest.respond_to?(:has_key?) && dest['_id'] && dest['_rev']
         "#{dest['_id']}?rev=#{dest['_rev']}"
       else
@@ -246,6 +246,27 @@ module CouchRest
       payload[:keys] = params.delete(:keys) if params[:keys]
       # Try recognising the name, otherwise assume already prepared
       view_path = name =~ /^([^_].+?)\/(.*)$/ ? "_design/#{$1}/_view/#{$2}" : name
+      url = CouchRest.paramify_url "#{@root}/#{view_path}", params
+      if block_given?
+        if !payload.empty?
+          @streamer.post url, payload, &block
+        else
+          @streamer.get url, &block
+        end
+      else
+        if !payload.empty?
+          CouchRest.post url, payload
+        else
+          CouchRest.get url
+        end
+      end
+    end
+
+    # Query a CouchDB
+    def query(name, params = {}, payload = {}, &block)
+      payload[:keys] = params.delete(:keys) if params[:keys]
+      # Try recognising the name, otherwise assume already prepared
+      view_path = name
       url = CouchRest.paramify_url "#{@root}/#{view_path}", params
       if block_given?
         if !payload.empty?
@@ -372,7 +393,7 @@ module CouchRest
     end
 
     def escape_docid id
-      /^_design\/(.*)/ =~ id ? "_design/#{CGI.escape($1)}" : CGI.escape(id) 
+      /^_design\/(.*)/ =~ id ? "_design/#{CGI.escape($1)}" : CGI.escape(id)
     end
 
     def encode_attachments(attachments)
